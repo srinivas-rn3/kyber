@@ -1,0 +1,78 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Stock Price API",
+    "version": "1.0.0",
+    "description": "API for retrieving current global stock quotes from Alpha Vantage."
+  },
+  "servers": [{ "url": "https://www.alphavantage.co" }],
+  "paths": {
+    "/query": {
+      "get": {
+        "summary": "Get current stock price",
+        "description": "Fetches the latest global quote (price) for a given equity symbol.",
+        "operationId": "getStockPrice",
+        "parameters": [
+          {
+            "name": "function",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "example": "GLOBAL_QUOTE",
+            "description": "The API function to call. Must be 'GLOBAL_QUOTE' for this operation."
+          },
+          {
+            "name": "symbol",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The stock ticker symbol (e.g., AAPL, MSFT, TSLA).",
+            "example": "AAPL"
+          },
+          {
+            "name": "apikey",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Your unique API key for authenticating with the Alpha Vantage service.",
+            "example": "demo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response containing the stock quote data.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StockPrice" }
+              }
+            }
+          },
+          "404": {
+            "description": "Symbol not found or invalid."
+          },
+          "500": {
+            "description": "Internal server error."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "StockPrice": {
+        "type": "object",
+        "properties": {
+          "Global Quote": {
+            "type": "object",
+            "properties": {
+              "05. price": {
+                "type": "string",
+                "description": "The current price of the stock."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
