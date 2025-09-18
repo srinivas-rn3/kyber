@@ -1,0 +1,2 @@
+Article 1: Resetting OpenText password
+To reset your password, go to the login page, click 'Forgot Password', and follow the steps in your email.
