@@ -7,11 +7,13 @@ from nodes.weather_node import weather_node
 from nodes.alarm_node import alarm_node
 from nodes.fallback_node import fallback_node
 from memory.memory_handler import update_memory
+from nodes.weather_api_node import weather_api_node
 
 # ----- Define State -----
 class State(TypedDict):
     message: str
     intent: str
+    city:  str
     history: list
 
 # ----- Decision Function -----
@@ -32,9 +34,10 @@ def build_graph():
 
     workflow.add_node("greet", greet)
     workflow.add_node("classify", classify_with_llm)
-    workflow.add_node("weather", weather_node)
+    #workflow.add_node("weather", weather_node)
     workflow.add_node("alarm", alarm_node)
     workflow.add_node("fallback", fallback_node)
+    workflow.add_node("weather", weather_api_node)
 
     workflow.set_entry_point("greet")
 
