@@ -8,6 +8,7 @@ from nodes.alarm_node import alarm_node
 from nodes.fallback_node import fallback_node
 from memory.memory_handler import update_memory
 from nodes.weather_api_node import weather_api_node
+from nodes.memory_check_node import memory_check_node
 
 # ----- Define State -----
 class State(TypedDict):
@@ -38,6 +39,7 @@ def build_graph():
     workflow.add_node("alarm", alarm_node)
     workflow.add_node("fallback", fallback_node)
     workflow.add_node("weather", weather_api_node)
+    workflow.add_node("memory_check", memory_check_node)
 
     workflow.set_entry_point("greet")
 
@@ -47,11 +49,13 @@ def build_graph():
         "classify",
         route_intent,
         {
-            "weather": "weather",
+            "weather": "memory_check",
             "alarm": "alarm",
             "unknown": "fallback",
             "exit": END
         }
     )
-
+    # After memory check, always go to weather
+    workflow.add_edge("memory_check", "weather")
+    
     return workflow.compile()
