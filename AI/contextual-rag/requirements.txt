@@ -1,0 +1,5 @@
+langchain
+langchain-aws
+langchain-community
+faiss-cpu
+python-dotenv
