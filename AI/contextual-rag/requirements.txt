@@ -1,5 +1,7 @@
 langchain
 langchain-aws
 langchain-community
+langchain-core
 faiss-cpu
 python-dotenv
+rank-bm25
