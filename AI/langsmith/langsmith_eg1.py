@@ -3,14 +3,14 @@ import time
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import FakeEmbeddings
+from langchain_aws import BedrockEmbeddings
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_aws import ChatBedrock
 
-# If you already use Bedrock embeddings, replace FakeEmbeddings with Bedrock embeddings later.
-# FakeEmbeddings is only to make this runnable everywhere.
-
+# Toggle between fake and real embeddings
+USE_BEDROCK_EMBEDDINGS = True  # Set to True when AWS is configured
 def build_retriever():
     docs = [
         Document(page_content="Leave policy: Earned leave is 24 days per year. Carry forward max 30 days."),
@@ -21,8 +21,17 @@ def build_retriever():
     splitter = RecursiveCharacterTextSplitter(chunk_size=300, chunk_overlap=20)
     chunks = splitter.split_documents(docs)
 
-    vs = FAISS.from_documents(chunks, embedding=FakeEmbeddings(size=384))
-    return vs.as_retriever(search_kwargs={"k": 3 })
+    if USE_BEDROCK_EMBEDDINGS:
+        embeddings = BedrockEmbeddings(
+            model_id="amazon.titan-embed-text-v2:0",
+            region_name="ap-south-1",
+        )
+    else:
+        embeddings = FakeEmbeddings(size=384)
+
+    vs = FAISS.from_documents(chunks, embedding=embeddings)
+    return vs.as_retriever(search_kwargs={"k": 2})
+
 
 def format_docs(docs):
     return "\n\n".join([f"- {d.page_content}" for d in docs])
@@ -38,7 +47,7 @@ prompt = ChatPromptTemplate.from_messages([
 # Replace this with Bedrock Chat model once your tracing is working.
 llm = ChatBedrock(
     model_id="anthropic.claude-3-haiku-20240307-v1:0",
-    region_name="ap-south-1",
+    region_name="us-east-1",
     model_kwargs={
         "temperature": 0.5,
         "max_tokens": 300,
