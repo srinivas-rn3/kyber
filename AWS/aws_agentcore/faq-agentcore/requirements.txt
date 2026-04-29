@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+strands-agents
+bedrock-agentcore
