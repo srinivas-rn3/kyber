@@ -1,6 +1,6 @@
 import json
 from bedrock_client import BedrockLLM
-from tools import get_weather, set_alarm, tell_joke
+from tools import get_weather, set_alarm, tell_joke, calculate
 
 
 class MiniAgent:
@@ -20,27 +20,38 @@ Available intents:
 1. weather
 2. set_alarm
 3. joke
-4. unknown
+4. calculate
+5. unknown
 
 Rules:
-- If user asks about weather, return intent = "weather" and extract city.
-- If user asks to set an alarm, return intent = "set_alarm" and extract time.
-- If user asks for a joke, return intent = "joke".
-- If request does not match, return intent = "unknown".
+- The user may request ONE or MULTIPLE actions in a single message.
+- Return a JSON object with an "actions" key containing a list of intents.
+- If user asks about weather, include an action with intent = "weather" and extract city.
+- If user asks to set an alarm, include an action with intent = "set_alarm" and extract time.
+- If user asks for a joke, include an action with intent = "joke".
+- If user asks for arithmetic calculation, include an action with intent = "calculate" and extract expression.
+- If nothing matches, return a single action with intent = "unknown".
 
-JSON formats:
+JSON format (always return this structure):
+{{"actions": [
+  {{"intent": "weather", "city": "Mumbai"}},
+  {{"intent": "set_alarm", "time": "6 AM"}}
+]}}
 
-For weather:
-{{"intent": "weather", "city": "Bangalore"}}
+Single intent example:
+{{"actions": [
+  {{"intent": "joke"}}
+]}}
 
-For set_alarm:
-{{"intent": "set_alarm", "time": "7 AM"}}
+Calculation example:
+{{"actions": [
+  {{"intent": "calculate", "expression": "12 + 5 * 2"}}
+]}}
 
-For joke:
-{{"intent": "joke"}}
-
-For unknown:
-{{"intent": "unknown"}}
+Unknown example:
+{{"actions": [
+  {{"intent": "unknown"}}
+]}}
 
 User request:
 {user_input}
@@ -50,28 +61,64 @@ User request:
         try:
             return json.loads(llm_output)
         except json.JSONDecodeError:
-            return {"intent": "unknown", "raw_output": llm_output}
+            return {"actions": [{"intent": "unknown", "raw_output": llm_output}]}
 
     def execute(self, user_input: str) -> str:
         prompt = self.build_router_prompt(user_input)
         llm_output = self.llm.invoke(prompt)
+        print("\nRAW LLM OUTPUT:", repr(llm_output))
         decision = self.parse_llm_output(llm_output)
+        print("PARSED DECISION:", decision)
 
-        intent = decision.get("intent", "unknown")
+        actions = decision.get("actions", [{"intent": "unknown"}])
+        results = []
 
-        if intent == "weather":
-            city = decision.get("city")
-            if not city:
-                return "I understood this as a weather request, but no city was found."
-            return get_weather(city)
+        for action in actions:
+            print("CURRENT ACTION:", action)
 
-        if intent == "set_alarm":
-            time = decision.get("time")
-            if not time:
-                return "I understood this as an alarm request, but no time was found."
-            return set_alarm(time)
+            #intent = action.get("intent", "unknown")
+            #print("CURRENT ACTION:", action)
 
-        if intent == "joke":
-            return tell_joke()
+            intent = action.get("intent", "unknown")
+            print("CURRENT INTENT:", intent)
 
-        return "Sorry, I could not understand the request."
+            if intent == "weather":
+                city = action.get("city")
+                if not city:
+                    results.append("I understood a weather request, but no city was found.")
+                else:
+                    tool_result = get_weather(city)
+                    print("TOOL RESULT:", tool_result)
+                    results.append(tool_result)
+
+            elif intent == "set_alarm":
+                time = action.get("time")
+                if not time:
+                    results.append("I understood an alarm request, but no time was found.")
+                else:
+                    tool_result = set_alarm(time)
+                    print("TOOL RESULT:", tool_result)
+                    results.append(tool_result)
+
+            elif intent == "joke":
+                tool_result = tell_joke()
+                print("TOOL RESULT:", tool_result)
+                results.append(tool_result)
+            
+            elif intent == "calculate":
+                expression = action.get("expression")
+                if not expression:
+                    results.append("I understood a calculation request, but no expression was found.")
+                else:
+                    tool_result = calculate(expression)
+                    print("TOOL RESULT:", tool_result)
+                    results.append(tool_result)
+
+            else:
+                fallback_message = f"Unsupported action returned by model: {action}"
+                print("TOOL RESULT:", fallback_message)
+                results.append(fallback_message)
+
+        print("FINAL RESULTS LIST:", results)
+
+        return "\n".join(results)

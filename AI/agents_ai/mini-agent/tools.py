@@ -19,3 +19,19 @@ def set_alarm(time: str) -> str:
 def tell_joke() -> str:
     """Return a simple programmer joke."""
     return "Why do programmers prefer dark mode? Because light attracts bugs."
+
+def calculate(expression: str) -> str:
+    """Safely evaluate a simple arithmetic expression and return the result."""
+    allowed_chars = "0123456789+-*/(). "
+
+    if not expression:
+        return "No calculation expression was provided."
+    
+    if any(char not in allowed_chars for char in expression):
+        return "Invalid characters in calculation expression."
+
+    try:
+        result = eval(expression, {"__builtins__": {}}, {})
+        return f"Calculation result: {expression} = {result}"
+    except Exception:
+        return "Could not evaluate the calculation."
