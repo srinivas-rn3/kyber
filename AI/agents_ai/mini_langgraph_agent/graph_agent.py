@@ -16,6 +16,9 @@ class AgentState(TypedDict):
     final_response: str
 
 
+llm = BedrockLLM()
+
+
 def build_router_prompt(user_input: str) -> str:
     return f"""
 You are an AI routing agent.
@@ -88,90 +91,137 @@ def parse_llm_output(llm_output: str) -> Dict[str, Any]:
         return {"actions": [{"intent": "unknown"}], "raw_output": llm_output}
 
 
-def build_graph():
-    # Instantiate here so MODEL_ID env var is already set by app.py before import
-    llm = BedrockLLM()
+def route_request(state: AgentState) -> AgentState:
+    prompt = build_router_prompt(state["user_input"])
+    llm_output = llm.invoke(prompt)
 
-    def route_request(state: AgentState) -> AgentState:
-        prompt = build_router_prompt(state["user_input"])
-        llm_output = llm.invoke(prompt)
+    print("\nRAW LLM OUTPUT:", repr(llm_output))
 
-        print("\nRAW LLM OUTPUT:", repr(llm_output))
+    parsed = parse_llm_output(llm_output)
+    actions = parsed.get("actions", [{"intent": "unknown"}])
 
-        parsed = parse_llm_output(llm_output)
-        actions = parsed.get("actions", [{"intent": "unknown"}])
+    print("PARSED ACTIONS:", actions)
 
-        print("PARSED ACTIONS:", actions)
+    return {
+        **state,
+        "prompt": prompt,
+        "llm_output": llm_output,
+        "actions": actions,
+    }
 
-        return {
-            **state,
-            "prompt": prompt,
-            "llm_output": llm_output,
-            "actions": actions,
-        }
 
-    def execute_actions(state: AgentState) -> AgentState:
-        results = []
+def should_execute_actions(state: AgentState) -> str:
+    """
+    Decide which node should run next.
 
-        for action in state["actions"]:
-            print("CURRENT ACTION:", action)
+    Returns:
+    - 'execute_actions' if there is at least one supported action
+    - 'fallback_response' if all actions are unknown
+    """
+    actions = state.get("actions", [])
 
-            intent = action.get("intent", "unknown")
-            print("CURRENT INTENT:", intent)
+    if not actions:
+        return "fallback_response"
 
-            if intent == "weather":
-                city = action.get("city")
-                if not city:
-                    tool_result = "I understood a weather request, but no city was found."
-                else:
-                    tool_result = get_weather(city)
+    supported_intents = {"weather", "set_alarm", "joke", "calculate"}
 
-            elif intent == "set_alarm":
-                time = action.get("time")
-                if not time:
-                    tool_result = "I understood an alarm request, but no time was found."
-                else:
-                    tool_result = set_alarm(time)
+    for action in actions:
+        intent = action.get("intent", "unknown")
+        if intent in supported_intents:
+            return "execute_actions"
 
-            elif intent == "joke":
-                tool_result = tell_joke()
+    return "fallback_response"
 
-            elif intent == "calculate":
-                expression = action.get("expression")
-                if not expression:
-                    tool_result = "I understood a calculation request, but no expression was found."
-                else:
-                    tool_result = calculate(expression)
 
+def execute_actions(state: AgentState) -> AgentState:
+    results = []
+
+    for action in state["actions"]:
+        print("CURRENT ACTION:", action)
+
+        intent = action.get("intent", "unknown")
+        print("CURRENT INTENT:", intent)
+
+        if intent == "weather":
+            city = action.get("city")
+            if not city:
+                tool_result = "I understood a weather request, but no city was found."
             else:
-                tool_result = f"Unsupported action returned by model: {action}"
+                tool_result = get_weather(city)
 
-            print("TOOL RESULT:", tool_result)
-            results.append(tool_result)
+        elif intent == "set_alarm":
+            time = action.get("time")
+            if not time:
+                tool_result = "I understood an alarm request, but no time was found."
+            else:
+                tool_result = set_alarm(time)
 
-        return {
-            **state,
-            "results": results,
-        }
+        elif intent == "joke":
+            tool_result = tell_joke()
 
-    def format_response(state: AgentState) -> AgentState:
-        final_response = "\n".join(state["results"])
-        print("FINAL RESULTS LIST:", state["results"])
+        elif intent == "calculate":
+            expression = action.get("expression")
+            if not expression:
+                tool_result = "I understood a calculation request, but no expression was found."
+            else:
+                tool_result = calculate(expression)
 
-        return {
-            **state,
-            "final_response": final_response,
-        }
+        else:
+            tool_result = f"Unsupported action returned by model: {action}"
 
+        print("TOOL RESULT:", tool_result)
+        results.append(tool_result)
+
+    return {
+        **state,
+        "results": results,
+    }
+
+
+def format_response(state: AgentState) -> AgentState:
+    final_response = "\n".join(state["results"])
+    print("FINAL RESULTS LIST:", state["results"])
+
+    return {
+        **state,
+        "final_response": final_response,
+    }
+
+
+def fallback_response(state: AgentState) -> AgentState:
+    """
+    Return a fallback response when no supported actions are found.
+    """
+    final_response = "Sorry, I could not understand your request."
+    print("FALLBACK RESPONSE:", final_response)
+
+    return {
+        **state,
+        "final_response": final_response,
+    }
+
+
+def build_graph():
     graph = StateGraph(AgentState)
 
     graph.add_node("route_request", route_request)
     graph.add_node("execute_actions", execute_actions)
     graph.add_node("format_response", format_response)
+    graph.add_node("fallback_response", fallback_response)
 
     graph.add_edge(START, "route_request")
-    graph.add_edge("route_request", "execute_actions")
+
+    graph.add_conditional_edges(
+        "route_request",
+        should_execute_actions,
+        {
+            "execute_actions": "execute_actions",
+            "fallback_response": "fallback_response",
+        },
+    )
+
     graph.add_edge("execute_actions", "format_response")
     graph.add_edge("format_response", END)
+    graph.add_edge("fallback_response", END)
 
     return graph.compile()
